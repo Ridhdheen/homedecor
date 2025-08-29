@@ -1,0 +1,32 @@
+Invalid cart item at index 8: Array
+(
+    [name] => sofa
+    [price] => 1500
+    [image] => uploads/couch.png
+    [quantity] => 1
+)
+
+Invalid cart item at index 9: Array
+(
+    [name] => chair
+    [price] => 250
+    [image] => uploads/post-1.jpg
+    [quantity] => 1
+)
+
+Invalid cart item at index 8: Array
+(
+    [name] => sofa
+    [price] => 1500
+    [image] => uploads/couch.png
+    [quantity] => 1
+)
+
+Invalid cart item at index 8: Array
+(
+    [name] => sofa
+    [price] => 1500
+    [image] => uploads/couch.png
+    [quantity] => 1
+)
+

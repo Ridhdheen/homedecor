@@ -1,0 +1,1397 @@
+<?php
+// Start session
+session_start();
+
+// Include database connection (assuming db_connection.php exists)
+require_once 'db_connection.php';
+
+// Check if user is logged in
+$isLoggedIn = isset($_SESSION['admin_id']);
+if (!$isLoggedIn) {
+    header("Location: admin-login.php");
+    exit;
+}
+
+// Handle logout
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header("Location: admin-login.php");
+    exit;
+}
+
+// Handle product delete
+if (isset($_GET['delete_product'])) {
+    $productId = (int)$_GET['delete_product'];
+    deleteProduct($productId); // Assume this function exists in db_connection.php
+    header("Location: index.php?section=products");
+    exit;
+}
+
+// Handle category delete
+if (isset($_GET['delete_category'])) {
+    $categoryId = (int)$_GET['delete_category'];
+    deleteCategory($categoryId); // Assume this function exists
+    header("Location: index.php?section=categories");
+    exit;
+}
+
+// Handle order status update
+if (isset($_POST['update_order_status'])) {
+    $orderId = (int)$_POST['orderId'];
+    $status = $_POST['status'] ?? 'Pending';
+    updateOrderStatus($orderId, $status); // Assume this function exists in db_connection.php
+    header("Location: index.php?section=orders");
+    exit;
+}
+
+// Handle product edit form submission
+if (isset($_POST['edit_product'])) {
+    $productData = [
+        'id' => $_POST['productId'] ?? 0,
+        'name' => $_POST['productName'] ?? '',
+        'category_id' => $_POST['productCategory'] ?? '',
+        'price' => $_POST['productPrice'] ?? 0,
+        'stock' => $_POST['productStock'] ?? 0,
+        'description' => $_POST['productDescription'] ?? '',
+        'image' => $_POST['currentImage'] ?? 'placeholder.jpg'
+    ];
+
+    // Handle new image upload if provided
+    if (isset($_FILES['newImage']) && $_FILES['newImage']['error'] == UPLOAD_ERR_OK) {
+        $targetDir = "../admin/uploads/"; // Upload to main site's uploads folder
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+        $filename = basename($_FILES["newImage"]["name"]);
+        $imagePath = $targetDir . $filename;
+        move_uploaded_file($_FILES["newImage"]["tmp_name"], $imagePath);
+        $productData['image'] = "uploads/" . $filename; // Save relative to main site
+    }
+
+    updateProduct($productData); // Assume this function exists
+    header("Location: index.php?section=products");
+    exit;
+}
+
+// Handle category edit form submission
+if (isset($_POST['edit_category'])) {
+    $categoryData = [
+        'id' => $_POST['categoryId'] ?? 0,
+        'name' => $_POST['categoryName'] ?? '',
+        'description' => $_POST['categoryDescription'] ?? ''
+    ];
+    updateCategory($categoryData); // Assume this function exists
+    header("Location: index.php?section=categories");
+    exit;
+}
+
+// Handle subcategory edit form submission
+if (isset($_POST['edit_subcategory'])) {
+    $subcategoryData = [
+        'id' => $_POST['subcategoryId'] ?? 0,
+        'name' => $_POST['subcategoryName'] ?? '',
+        'parent_id' => $_POST['parentCategory'] ?? null,
+        'description' => $_POST['subcategoryDescription'] ?? ''
+    ];
+    updateCategory($subcategoryData); // Assume this function supports parent_id
+    header("Location: index.php?section=categories");
+    exit;
+}
+
+// Handle add product form submission
+if (isset($_POST['add_product'])) {
+    // Handle file upload
+    $imagePath = '';
+    if (isset($_FILES['productImage']) && $_FILES['productImage']['error'] == UPLOAD_ERR_OK) {
+        $targetDir = "../furniture/uploads/"; // Upload to main site's uploads folder
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+        $filename = basename($_FILES["productImage"]["name"]);
+        $fullPath = $targetDir . $filename;
+        move_uploaded_file($_FILES["productImage"]["tmp_name"], $fullPath);
+        $imagePath = "uploads/" . $filename; // Save path relative to main site
+    }
+    $productData = [
+        'name' => $_POST['productName'] ?? '',
+        'category_id' => $_POST['productCategory'] ?? '',
+        'price' => $_POST['productPrice'] ?? 0,
+        'stock' => $_POST['productStock'] ?? 0,
+        'description' => $_POST['productDescription'] ?? '',
+        'image' => $imagePath ?: 'https://via.placeholder.com/40'
+    ];
+    addProduct($productData); // Assume this function exists
+    $product_success = "Product added successfully!";
+}
+
+// Handle add category form submission
+if (isset($_POST['add_category'])) {
+    $categoryData = [
+        'name' => $_POST['categoryName'] ?? '',
+        'description' => $_POST['categoryDescription'] ?? '',
+        'parent_id' => null
+    ];
+    addCategory($categoryData); // Assume this function exists
+    $category_success = "Category added successfully!";
+}
+
+// Handle add subcategory form submission
+if (isset($_POST['add_subcategory'])) {
+    $subcategoryData = [
+        'name' => $_POST['subcategoryName'] ?? '',
+        'description' => $_POST['subcategoryDescription'] ?? '',
+        'parent_id' => $_POST['parentCategory'] ?? null
+    ];
+    addCategory($subcategoryData); // Assume this function supports parent_id
+    $subcategory_success = "Subcategory added successfully!";
+}
+
+// Handle add user form submission
+if (isset($_POST['add_user'])) {
+    $userData = [
+        'name' => $_POST['userName'] ?? '',
+        'email' => $_POST['userEmail'] ?? '',
+        'password' => password_hash($_POST['userPassword'] ?? '', PASSWORD_DEFAULT),
+        'role' => $_POST['userRole'] ?? 'user',
+        'status' => $_POST['userStatus'] ?? 'active'
+    ];
+    addUser($userData); // Assume this function exists
+    $user_success = "User added successfully!";
+}
+
+// Handle user edit form submission
+if (isset($_POST['edit_user'])) {
+    $userData = [
+        'id' => $_POST['userId'] ?? 0,
+        'name' => $_POST['userName'] ?? '',
+        'email' => $_POST['userEmail'] ?? '',
+        'role' => $_POST['userRole'] ?? 'user',
+        'status' => $_POST['userStatus'] ?? 'active'
+    ];
+    // Only update password if provided
+    if (!empty($_POST['userPassword'])) {
+        $userData['password'] = password_hash($_POST['userPassword'], PASSWORD_DEFAULT);
+    }
+    updateUser($userData); // Assume this function exists
+    header("Location: index.php?section=users");
+    exit;
+}
+
+// Handle user delete
+if (isset($_GET['delete_user'])) {
+    $userId = (int)$_GET['delete_user'];
+    deleteUser($userId); // Assume this function exists
+    header("Location: index.php?section=users");
+    exit;
+}
+
+// Fetch products, categories, orders, and users for display
+$products = getProducts(); // Assume this function exists
+$categories = getCategories(); // Assume this function exists
+$orders = getOrders(); // Assume this function exists and returns orders with nested 'items' array
+$users = getUsers(); // Assume this function exists
+$statusColors = [
+    'Pending' => 'warning',
+    'Shipped' => 'primary',
+    'Delivered' => 'success',
+    'Cancelled' => 'danger'
+];
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel | Home Décor</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Animate.css -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary-color: #6c5ce7;
+            --secondary-color: #a29bfe;
+            --dark-color: #2d3436;
+            --light-color: #f5f6fa;
+            --success-color: #00b894;
+            --danger-color: #d63031;
+            --warning-color: #fdcb6e;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            overflow-x: hidden;
+        }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            height: 100vh;
+            background: linear-gradient(135deg, var(--dark-color), var(--primary-color));
+            color: white;
+            position: fixed;
+            width: 250px;
+            transition: all 0.3s;
+            z-index: 1000;
+            box-shadow: 5px 0 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .sidebar-header h3 {
+            margin-bottom: 0;
+            font-weight: 600;
+        }
+        
+        .sidebar-header p {
+            opacity: 0.8;
+            font-size: 0.9rem;
+            margin-bottom: 0;
+        }
+        
+        .sidebar-menu {
+            padding: 20px 0;
+        }
+        
+        .sidebar-menu li {
+            margin-bottom: 5px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .sidebar-menu li a {
+            color: white;
+            padding: 12px 20px;
+            display: block;
+            text-decoration: none;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .sidebar-menu li a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            padding-left: 25px;
+        }
+        
+        .sidebar-menu li.active a {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+        
+        .sidebar-menu li a i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        /* Main Content Styles */
+        .main-content {
+            margin-left: 250px;
+            transition: all 0.3s;
+            min-height: 100vh;
+        }
+        
+        /* Top Navigation */
+        .top-navbar {
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+        }
+        
+        .user-profile img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+            object-fit: cover;
+        }
+        
+        /* Dashboard Cards */
+        .dashboard-card {
+            border: none;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-icon {
+            font-size: 2.5rem;
+            opacity: 0.3;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+        }
+        
+        /* Table Styles */
+        .data-table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+        
+        .table-responsive {
+            border-radius: 10px;
+        }
+        
+        /* Form Styles */
+        .admin-form {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+        
+        /* Animation Classes */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.4s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: -250px;
+            }
+            .sidebar.active {
+                margin-left: 0;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .top-navbar {
+                padding: 15px;
+            }
+        }
+
+        /* Product Image Style */
+        .product-image {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header animate__animated animate__fadeIn">
+            <h3>Home Décor</h3>
+            <p>Admin Panel</p>
+        </div>
+        <ul class="sidebar-menu">
+            <li class="active animate__animated animate__fadeInLeft">
+                <a href="#dashboard" data-section="dashboard"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+            </li>
+            <li class="animate__animated animate__fadeInLeft">
+                <a href="#products" data-section="products"><i class="fas fa-box"></i> Products</a>
+            </li>
+            <li class="animate__animated animate__fadeInLeft">
+                <a href="#categories" data-section="categories"><i class="fas fa-tags"></i> Categories</a>
+            </li>
+            <li class="animate__animated animate__fadeInLeft">
+                <a href="#orders" data-section="orders"><i class="fas fa-shopping-cart"></i> Orders</a>
+            </li>
+            <li class="animate__animated animate__fadeInLeft">
+                <a href="#users" data-section="users"><i class="fas fa-users"></i> Users</a>
+            </li>
+            <li class="animate__animated animate__fadeInLeft">
+                <a href="#payments" data-section="payments"><i class="fas fa-credit-card"></i> Payments</a>
+            </li>
+            <li class="animate__animated animate__fadeInLeft">
+                <a href="#feedback" data-section="feedback"><i class="fas fa-comment-dots"></i> Feedback</a>
+            </li>
+            <li class="animate__animated animate__fadeInLeft">
+                <a href="#settings" data-section="settings"><i class="fas fa-cog"></i> Settings</a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Navigation -->
+        <div class="top-navbar d-flex justify-content-between align-items-center">
+            <button id="sidebarToggle" class="btn btn-primary d-md-none"><i class="fas fa-bars"></i></button>
+            <div class="user-profile">
+                <img src="https://via.placeholder.com/40" alt="User">
+                <span>Admin</span>
+                <a href="?logout" class="btn btn-sm btn-outline-danger ms-3">Logout</a>
+            </div>
+        </div>
+
+        <!-- Content Sections -->
+        <div class="container-fluid p-4">
+            <!-- Dashboard Section -->
+            <div class="content-section" id="dashboard">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="dashboard-card card text-white bg-primary">
+                            <div class="card-body">
+                                <h5 class="card-title">Total Products</h5>
+                                <h2><?php echo count($products); ?></h2>
+                                <i class="fas fa-box card-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="dashboard-card card text-white bg-success">
+                            <div class="card-body">
+                                <h5 class="card-title">Total Categories</h5>
+                                <h2><?php echo count($categories); ?></h2>
+                                <i class="fas fa-tags card-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="dashboard-card card text-white bg-warning">
+                            <div class="card-body">
+                                <h5 class="card-title">Pending Orders</h5>
+                                <h2><?php echo count(array_filter($orders, function($o) { return ($o['status'] ?? '') == 'Pending'; })); ?></h2>
+                                <i class="fas fa-shopping-cart card-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="dashboard-card card text-white bg-danger">
+                            <div class="card-body">
+                                <h5 class="card-title">Low Stock</h5>
+                                <h2><?php echo count(array_filter($products, function($p) { return ($p['stock'] ?? 0) < 10; })); ?></h2>
+                                <i class="fas fa-exclamation-triangle card-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Section -->
+            <div class="content-section" id="products" style="display: none;">
+                <div class="row slide-in">
+                    <div class="col-md-4">
+                        <div class="admin-form">
+                            <h5>Add Product</h5>
+                            <form method="POST" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label for="productName" class="form-label">Name</label>
+                                    <input type="text" name="productName" class="form-control" id="productName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="productCategory" class="form-label">Category</label>
+                                    <select name="productCategory" class="form-control" id="productCategory" required>
+                                        <option value="">Select Category</option>
+                                        <?php foreach ($categories as $category): ?>
+                                            <option value="<?php echo $category['id'] ?? ''; ?>"><?php echo htmlspecialchars($category['name'] ?? ''); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="productPrice" class="form-label">Price</label>
+                                    <input type="number" step="0.01" name="productPrice" class="form-control" id="productPrice" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="productStock" class="form-label">Stock</label>
+                                    <input type="number" name="productStock" class="form-control" id="productStock" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="productDescription" class="form-label">Description</label>
+                                    <textarea name="productDescription" class="form-control" id="productDescription" rows="3"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="productImage" class="form-label">Image</label>
+                                    <input type="file" name="productImage" class="form-control" id="productImage">
+                                </div>
+                                <button type="submit" name="add_product" class="btn btn-primary">Add Product</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="data-table card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">Products</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Image</th>
+                                                <th>Name</th>
+                                                <th>Category</th>
+                                                <th>Price</th>
+                                                <th>Stock</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($products as $product): ?>
+                                            <tr>
+                                                <td>
+                                                    <img src="<?php echo htmlspecialchars($product['image'] ?? 'https://via.placeholder.com/40'); ?>" 
+                                                         alt="<?php echo htmlspecialchars($product['name'] ?? ''); ?>" 
+                                                         class="product-image">
+                                                </td>
+                                                <td><?php echo htmlspecialchars($product['name'] ?? ''); ?></td>
+                                                <td><?php echo htmlspecialchars($product['category_name'] ?? 'None'); ?></td>
+                                                <td>$<?php echo number_format($product['price'] ?? 0, 2); ?></td>
+                                                <td><?php echo $product['stock'] ?? 0; ?></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary edit-product-btn"
+                                                        data-id="<?php echo $product['id'] ?? ''; ?>"
+                                                        data-name="<?php echo htmlspecialchars($product['name'] ?? ''); ?>"
+                                                        data-category="<?php echo $product['category_id'] ?? ''; ?>"
+                                                        data-price="<?php echo $product['price'] ?? ''; ?>"
+                                                        data-stock="<?php echo $product['stock'] ?? ''; ?>"
+                                                        data-description="<?php echo htmlspecialchars($product['description'] ?? ''); ?>"
+                                                        data-image="<?php echo htmlspecialchars($product['image'] ?? ''); ?>">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger delete-product-btn" data-id="<?php echo $product['id'] ?? ''; ?>">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Categories Section -->
+            <div class="content-section" id="categories" style="display: none;">
+                <div class="row slide-in">
+                    <div class="col-md-4">
+                        <div class="admin-form">
+                            <h5>Add Category</h5>
+                            <form method="POST">
+                                <div class="mb-3">
+                                    <label for="categoryName" class="form-label">Name</label>
+                                    <input type="text" name="categoryName" class="form-control" id="categoryName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="categoryDescription" class="form-label">Description</label>
+                                    <textarea name="categoryDescription" class="form-control" id="categoryDescription" rows="3"></textarea>
+                                </div>
+                                <button type="submit" name="add_category" class="btn btn-primary">Save Category</button>
+                            </form>
+                        </div>
+                        <div class="admin-form mt-4">
+                            <h5>Add Subcategory</h5>
+                            <form method="POST">
+                                <div class="mb-3">
+                                    <label for="subcategoryName" class="form-label">Name</label>
+                                    <input type="text" name="subcategoryName" class="form-control" id="subcategoryName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="parentCategory" class="form-label">Parent Category</label>
+                                    <select name="parentCategory" class="form-control" id="parentCategory" required>
+                                        <option value="">Select Parent Category</option>
+                                        <?php foreach ($categories as $category): ?>
+                                            <?php if (!($category['parent_id'] ?? false)): ?>
+                                                <option value="<?php echo $category['id'] ?? ''; ?>"><?php echo htmlspecialchars($category['name'] ?? ''); ?></option>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="subcategoryDescription" class="form-label">Description</label>
+                                    <textarea name="subcategoryDescription" class="form-control" id="subcategoryDescription" rows="3"></textarea>
+                                </div>
+                                <button type="submit" name="add_subcategory" class="btn btn-primary">Save Subcategory</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="data-table card slide-in">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">Categories & Subcategories</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Parent Category</th>
+                                                <th>Products</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($categories as $category): ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($category['name'] ?? ''); ?></td>
+                                                <td>
+                                                    <?php
+                                                    if ($category['parent_id'] ?? false) {
+                                                        $parent = array_filter($categories, function($cat) use ($category) { return ($cat['id'] ?? 0) == ($category['parent_id'] ?? 0); });
+                                                        if ($parent) {
+                                                            $firstParent = reset($parent);
+                                                            echo htmlspecialchars($firstParent['name'] ?? 'None');
+                                                        } else {
+                                                            echo 'None';
+                                                        }
+                                                    } else {
+                                                        echo 'None';
+                                                    }
+                                                    ?>
+                                                </td>
+                                                <td><?php echo $category['product_count'] ?? 0; ?></td>
+                                                <td><span class="badge bg-success">Active</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary edit-<?php echo ($category['parent_id'] ?? false) ? 'sub' : ''; ?>category-btn"
+                                                        data-id="<?php echo $category['id'] ?? ''; ?>"
+                                                        data-name="<?php echo htmlspecialchars($category['name'] ?? ''); ?>"
+                                                        data-description="<?php echo htmlspecialchars($category['description'] ?? ''); ?>"
+                                                        data-parent="<?php echo $category['parent_id'] ?? ''; ?>">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger delete-category-btn" data-id="<?php echo $category['id'] ?? ''; ?>">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orders Section -->
+            <div class="content-section" id="orders" style="display: none;">
+                <div class="row slide-in">
+                    <div class="col-12">
+                        <div class="data-table card">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Orders</h5>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-secondary" id="filterPending">Pending</button>
+                                    <button class="btn btn-sm btn-outline-primary" id="filterShipped">Shipped</button>
+                                    <button class="btn btn-sm btn-outline-success" id="filterDelivered">Delivered</button>
+                                    <button class="btn btn-sm btn-outline-danger" id="filterCancelled">Cancelled</button>
+                                    <button class="btn btn-sm btn-outline-dark" id="filterAll">All</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover" id="ordersTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Order ID</th>
+                                                <th>Customer</th>
+                                                <th>Date</th>
+                                                <th>Amount</th>
+                                                <th>Status</th>
+                                                <th>Payment</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($orders as $order): ?>
+                                            <tr class="order-row" data-status="<?php echo strtolower($order['status'] ?? ''); ?>">
+                                                <td>#ORD-<?php echo $order['order_id'] ?? ''; ?></td>
+                                                <td><?php echo htmlspecialchars($order['customer_name'] ?? ''); ?></td>
+                                                <td><?php echo isset($order['order_date']) ? date('M d, Y', strtotime($order['order_date'])) : 'N/A'; ?></td>
+                                                <td>$<?php echo number_format($order['total_amount'] ?? 0, 2); ?></td>
+                                                <td>
+                                                    <span class="badge bg-<?php echo $statusColors[$order['status'] ?? 'Pending'] ?? 'secondary'; ?>">
+                                                        <?php echo $order['status'] ?? 'Pending'; ?>
+                                                    </span>
+                                                </td>
+                                                <td><?php echo $order['payment_method'] ?? ''; ?></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-info view-order-btn" data-id="<?php echo $order['order_id'] ?? ''; ?>">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-warning update-status-btn" data-id="<?php echo $order['order_id'] ?? ''; ?>" data-status="<?php echo $order['status'] ?? ''; ?>">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Section -->
+            <div class="content-section" id="users" style="display: none;">
+                <div class="row slide-in">
+                    <div class="col-md-4">
+                        <div class="admin-form">
+                            <h5>Add User</h5>
+                            <form method="POST">
+                                <div class="mb-3">
+                                    <label for="userName" class="form-label">Name</label>
+                                    <input type="text" name="userName" class="form-control" id="userName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="userEmail" class="form-label">Email</label>
+                                    <input type="email" name="userEmail" class="form-control" id="userEmail" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="userPassword" class="form-label">Password</label>
+                                    <input type="password" name="userPassword" class="form-control" id="userPassword" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="userRole" class="form-label">Role</label>
+                                    <select name="userRole" class="form-control" id="userRole" required>
+                                        <option value="user">User</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="userStatus" class="form-label">Status</label>
+                                    <select name="userStatus" class="form-control" id="userStatus" required>
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </div>
+                                <button type="submit" name="add_user" class="btn btn-primary">Add User</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="data-table card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">Users</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Email</th>
+                                                <th>Role</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($users as $user): ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($user['name'] ?? ''); ?></td>
+                                                <td><?php echo htmlspecialchars($user['email'] ?? ''); ?></td>
+                                                <td><?php echo ucfirst($user['role'] ?? ''); ?></td>
+                                                <td>
+                                                    <span class="badge bg-<?php echo ($user['status'] ?? '') == 'active' ? 'success' : 'danger'; ?>">
+                                                        <?php echo ucfirst($user['status'] ?? ''); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary edit-user-btn"
+                                                        data-id="<?php echo $user['id'] ?? ''; ?>"
+                                                        data-name="<?php echo htmlspecialchars($user['name'] ?? ''); ?>"
+                                                        data-email="<?php echo htmlspecialchars($user['email'] ?? ''); ?>"
+                                                        data-role="<?php echo $user['role'] ?? ''; ?>"
+                                                        data-status="<?php echo $user['status'] ?? ''; ?>">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger delete-user-btn" data-id="<?php echo $user['id'] ?? ''; ?>">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payments Section -->
+            <div class="content-section" id="payments" style="display: none;">
+                <!-- Payment management content -->
+            </div>
+            <!-- Feedback Section -->
+            <div class="content-section" id="feedback" style="display: none;">
+                <!-- Feedback management content -->
+            </div>
+            <!-- Settings Section -->
+            <div class="content-section" id="settings" style="display: none;">
+                <!-- Settings content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Product Modal -->
+    <div class="modal fade" id="editProductModal" tabindex="-1" aria-labelledby="editProductModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editProductModalLabel">Edit Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="productId" id="editProductId">
+                        <input type="hidden" name="currentImage" id="editCurrentImage">
+                        <div class="mb-3">
+                            <label for="editProductName" class="form-label">Name</label>
+                            <input type="text" name="productName" class="form-control" id="editProductName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editProductCategory" class="form-label">Category</label>
+                            <select name="productCategory" class="form-control" id="editProductCategory" required>
+                                <option value="">Select Category</option>
+                                <?php foreach ($categories as $category): ?>
+                                    <option value="<?php echo $category['id'] ?? ''; ?>"><?php echo htmlspecialchars($category['name'] ?? ''); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editProductPrice" class="form-label">Price</label>
+                            <input type="number" step="0.01" name="productPrice" class="form-control" id="editProductPrice" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editProductStock" class="form-label">Stock</label>
+                            <input type="number" name="productStock" class="form-control" id="editProductStock" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editProductDescription" class="form-label">Description</label>
+                            <textarea name="productDescription" class="form-control" id="editProductDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newImage" class="form-label">New Image (optional)</label>
+                            <input type="file" name="newImage" class="form-control" id="newImage">
+                        </div>
+                        <button type="submit" name="edit_product" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Category Modal -->
+    <div class="modal fade" id="editCategoryModal" tabindex="-1" aria-labelledby="editCategoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editCategoryModalLabel">Edit Category</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST">
+                        <input type="hidden" name="categoryId" id="editCategoryId">
+                        <div class="mb-3">
+                            <label for="editCategoryName" class="form-label">Name</label>
+                            <input type="text" name="categoryName" class="form-control" id="editCategoryName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editCategoryDescription" class="form-label">Description</label>
+                            <textarea name="categoryDescription" class="form-control" id="editCategoryDescription" rows="3"></textarea>
+                        </div>
+                        <button type="submit" name="edit_category" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Subcategory Modal -->
+    <div class="modal fade" id="editSubcategoryModal" tabindex="-1" aria-labelledby="editSubcategoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editSubcategoryModalLabel">Edit Subcategory</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST">
+                        <input type="hidden" name="subcategoryId" id="editSubcategoryId">
+                        <div class="mb-3">
+                            <label for="editSubcategoryName" class="form-label">Name</label>
+                            <input type="text" name="subcategoryName" class="form-control" id="editSubcategoryName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editParentCategory" class="form-label">Parent Category</label>
+                            <select name="parentCategory" class="form-control" id="editParentCategory" required>
+                                <option value="">Select Parent Category</option>
+                                <?php foreach ($categories as $category): ?>
+                                    <?php if (!($category['parent_id'] ?? false)): ?>
+                                        <option value="<?php echo $category['id'] ?? ''; ?>"><?php echo htmlspecialchars($category['name'] ?? ''); ?></option>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editSubcategoryDescription" class="form-label">Description</label>
+                            <textarea name="subcategoryDescription" class="form-control" id="editSubcategoryDescription" rows="3"></textarea>
+                        </div>
+                        <button type="submit" name="edit_subcategory" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Order Modal -->
+    <div class="modal fade" id="viewOrderModal" tabindex="-1" aria-labelledby="viewOrderModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewOrderModalLabel">Order Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-4">
+                                <div class="card-header bg-light">
+                                    <h6>Customer Information</h6>
+                                </div>
+                                <div class="card-body" id="customerInfo">
+                                    <!-- Will be filled by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-4">
+                                <div class="card-header bg-light">
+                                    <h6>Billing Details</h6>
+                                </div>
+                                <div class="card-body" id="billingInfo">
+                                    <!-- Will be filled by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h6>Order Items</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Price</th>
+                                        <th>Quantity</th>
+                                        <th>Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orderItems"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6>Order Notes</h6>
+                                </div>
+                                <div class="card-body" id="orderNotes">
+                                    <!-- Will be filled by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6>Order Summary</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td>Subtotal:</td>
+                                            <td id="orderSubtotal"></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Shipping:</td>
+                                            <td id="orderShipping"></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tax:</td>
+                                            <td id="orderTax"></td>
+                                        </tr>
+                                        <tr class="table-active">
+                                            <td><strong>Total:</strong></td>
+                                            <td><strong id="orderTotal"></strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Payment Method:</td>
+                                            <td id="orderPaymentMethod"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="printInvoiceBtn">Print Invoice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Order Status Modal -->
+    <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="updateStatusModalLabel">Update Order Status</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST">
+                        <input type="hidden" name="orderId" id="updateOrderId">
+                        <div class="mb-3">
+                            <label for="orderStatus" class="form-label">Status</label>
+                            <select name="status" class="form-control" id="orderStatus">
+                                <option value="Pending">Pending</option>
+                                <option value="Shipped">Shipped</option>
+                                <option value="Delivered">Delivered</option>
+                                <option value="Cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <button type="submit" name="update_order_status" class="btn btn-primary">Update</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editUserModalLabel">Edit User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST">
+                        <input type="hidden" name="userId" id="editUserId">
+                        <div class="mb-3">
+                            <label for="editUserName" class="form-label">Name</label>
+                            <input type="text" name="userName" class="form-control" id="editUserName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editUserEmail" class="form-label">Email</label>
+                            <input type="email" name="userEmail" class="form-control" id="editUserEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editUserPassword" class="form-label">Password (leave blank to keep unchanged)</label>
+                            <input type="password" name="userPassword" class="form-control" id="editUserPassword">
+                        </div>
+                        <div class="mb-3">
+                            <label for="editUserRole" class="form-label">Role</label>
+                            <select name="userRole" class="form-control" id="editUserRole" required>
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editUserStatus" class="form-label">Status</label>
+                            <select name="userStatus" class="form-control" id="editUserStatus" required>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <button type="submit" name="edit_user" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script>
+        // Sidebar toggle for mobile
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+
+        // Navigation functionality
+        const navLinks = document.querySelectorAll('.sidebar-menu a');
+        const contentSections = document.querySelectorAll('.content-section');
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const section = this.getAttribute('data-section');
+                if (section) {
+                    // Update active menu item
+                    navLinks.forEach(l => l.parentElement.classList.remove('active'));
+                    this.parentElement.classList.add('active');
+
+                    // Show selected section
+                    contentSections.forEach(s => s.style.display = 'none');
+                    document.getElementById(section).style.display = 'block';
+                }
+            });
+        });
+
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // Product edit modal handling
+        document.querySelectorAll('.edit-product-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('editProductModal'));
+                document.getElementById('editProductId').value = this.dataset.id;
+                document.getElementById('editProductName').value = this.dataset.name;
+                document.getElementById('editProductCategory').value = this.dataset.category;
+                document.getElementById('editProductPrice').value = this.dataset.price;
+                document.getElementById('editProductStock').value = this.dataset.stock;
+                document.getElementById('editProductDescription').value = this.dataset.description;
+                document.getElementById('editCurrentImage').value = this.dataset.image;
+                modal.show();
+            });
+        });
+
+        // Category edit modal handling
+        document.querySelectorAll('.edit-category-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('editCategoryModal'));
+                document.getElementById('editCategoryId').value = this.dataset.id;
+                document.getElementById('editCategoryName').value = this.dataset.name;
+                document.getElementById('editCategoryDescription').value = this.dataset.description;
+                modal.show();
+            });
+        });
+
+        // Subcategory edit modal handling
+        document.querySelectorAll('.edit-subcategory-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('editSubcategoryModal'));
+                document.getElementById('editSubcategoryId').value = this.dataset.id;
+                document.getElementById('editSubcategoryName').value = this.dataset.name;
+                document.getElementById('editParentCategory').value = this.dataset.parent;
+                document.getElementById('editSubcategoryDescription').value = this.dataset.description;
+                modal.show();
+            });
+        });
+
+        // User edit modal handling
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+                document.getElementById('editUserId').value = this.dataset.id;
+                document.getElementById('editUserName').value = this.dataset.name;
+                document.getElementById('editUserEmail').value = this.dataset.email;
+                document.getElementById('editUserRole').value = this.dataset.role;
+                document.getElementById('editUserStatus').value = this.dataset.status;
+                document.getElementById('editUserPassword').value = '';
+                modal.show();
+            });
+        });
+
+        // Delete handling for products
+        document.querySelectorAll('.delete-product-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete this product?')) {
+                    window.location.href = '?section=products&delete_product=' + this.dataset.id;
+                }
+            });
+        });
+
+        // Delete handling for categories/subcategories
+        document.querySelectorAll('.delete-category-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete this category/subcategory?')) {
+                    window.location.href = '?section=categories&delete_category=' + this.dataset.id;
+                }
+            });
+        });
+
+        // Delete handling for users
+        document.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete this user?')) {
+                    window.location.href = '?section=users&delete_user=' + this.dataset.id;
+                }
+            });
+        });
+
+        // Orders data for client-side rendering
+        var orders = <?php echo json_encode($orders); ?>;
+
+        // View order details modal handling
+        document.querySelectorAll('.view-order-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('viewOrderModal'));
+                const orderId = parseInt(this.dataset.id);
+                const order = orders.find(o => o.order_id === orderId);
+                
+                if (order) {
+                    // Customer Info
+                    document.getElementById('customerInfo').innerHTML = `
+                        <p><strong>Name:</strong> ${order.customer_name ?? ''}</p>
+                        <p><strong>Email:</strong> ${order.email ?? ''}</p>
+                        <p><strong>Phone:</strong> ${order.phone || 'N/A'}</p>
+                        <p><strong>Account:</strong> ${order.user_id ? 'Registered User' : 'Guest Checkout'}</p>
+                    `;
+                    
+                    // Billing Info
+                    document.getElementById('billingInfo').innerHTML = `
+                        <p><strong>Company:</strong> ${order.company || 'N/A'}</p>
+                        <p><strong>Address:</strong> ${order.address ?? ''}</p>
+                        ${order.address2 ? `<p><strong>Address 2:</strong> ${order.address2}</p>` : ''}
+                        <p><strong>City:</strong> ${order.city ?? ''}</p>
+                        <p><strong>State/Country:</strong> ${order.state ?? ''}</p>
+                        <p><strong>Postal/Zip:</strong> ${order.postcode ?? ''}</p>
+                        <p><strong>Country:</strong> ${order.country ?? ''}</p>
+                    `;
+                    
+                    // Order Items
+                    const itemsBody = document.getElementById('orderItems');
+                    itemsBody.innerHTML = '';
+                    let subtotal = 0;
+                    
+                    (order.items ?? []).forEach(item => {
+                        const itemSubtotal = (item.quantity ?? 0) * (item.price ?? 0);
+                        subtotal += itemSubtotal;
+                        itemsBody.innerHTML += `
+                            <tr>
+                                <td>${item.name ?? ''}</td>
+                                <td>$${parseFloat(item.price ?? 0).toFixed(2)}</td>
+                                <td>${item.quantity ?? 0}</td>
+                                <td>$${itemSubtotal.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    // Order Summary
+                    const shipping = order.shipping_cost || 0;
+                    const tax = order.tax || 0;
+                    const total = subtotal + shipping + tax;
+                    
+                    document.getElementById('orderSubtotal').innerText = `$${subtotal.toFixed(2)}`;
+                    document.getElementById('orderShipping').innerText = `$${shipping.toFixed(2)}`;
+                    document.getElementById('orderTax').innerText = `$${tax.toFixed(2)}`;
+                    document.getElementById('orderTotal').innerText = `$${total.toFixed(2)}`;
+                    document.getElementById('orderPaymentMethod').innerText = order.payment_method || 'Unknown';
+                    
+                    // Order Notes
+                    document.getElementById('orderNotes').innerHTML = order.notes ? 
+                        `<p>${order.notes}</p>` : 
+                        `<p class="text-muted">No notes for this order.</p>`;
+                    
+                    modal.show();
+                }
+            });
+        });
+
+        // Update order status modal handling
+        document.querySelectorAll('.update-status-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const modal = new bootstrap.Modal(document.getElementById('updateStatusModal'));
+                document.getElementById('updateOrderId').value = this.dataset.id;
+                document.getElementById('orderStatus').value = this.dataset.status;
+                modal.show();
+            });
+        });
+
+        // Order filtering functionality
+        document.querySelectorAll('[id^="filter"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const filter = this.id.replace('filter', '').toLowerCase();
+                const rows = document.querySelectorAll('.order-row');
+                
+                rows.forEach(row => {
+                    if (filter === 'all' || row.dataset.status === filter) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                
+                // Update active filter button
+                document.querySelectorAll('[id^="filter"]').forEach(b => {
+                    b.classList.remove('active');
+                });
+                this.classList.add('active');
+            });
+        });
+
+        // Print invoice functionality
+        document.getElementById('printInvoiceBtn').addEventListener('click', function() {
+            window.print();
+        });
+        document.querySelectorAll('.view-order-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const modal = new bootstrap.Modal(document.getElementById('viewOrderModal'));
+        const orderId = parseInt(this.dataset.id);
+        const order = orders.find(o => o.order_id === orderId);
+        
+        if (order) {
+            // Customer Info (add date)
+            document.getElementById('customerInfo').innerHTML = `
+                <p><strong>Name:</strong> ${order.customer_name ?? ''}</p>
+                <p><strong>Email:</strong> ${order.email ?? ''}</p>
+                <p><strong>Phone:</strong> ${order.phone || 'N/A'}</p>
+                <p><strong>Account:</strong> ${order.user_id ? 'Registered User' : 'Guest Checkout'}</p>
+                <p><strong>Date:</strong> ${new Date(order.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) || 'N/A'}</p>
+            `;
+            
+            // ... (rest of the existing code remains the same)
+            modal.show();
+        }
+    });
+});
+    </script>
+</body>
+</html>
